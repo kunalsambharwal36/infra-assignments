@@ -1,0 +1,216 @@
+---
+# Source: config-service/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+
+metadata:
+  name: config-service-secret
+  namespace: config-service
+
+type: Opaque
+
+stringData:
+  DB_USER: "postgres"
+  DB_PASSWORD: "postgres"
+---
+# Source: config-service/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: config-service-config
+  namespace: config-service
+
+data:
+  DB_HOST: "config-service-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "configdb"
+---
+# Source: config-service/templates/db-init-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: config-service-db-init
+  namespace: config-service
+
+data:
+  001_create_configs.sql: |
+
+    CREATE TABLE IF NOT EXISTS configs (
+        id VARCHAR(255) PRIMARY KEY,
+        host VARCHAR(255),
+        port INT,
+        app_name VARCHAR(255),
+        log_level VARCHAR(50)
+    );
+---
+# Source: config-service/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+metadata:
+  name: config-service-postgres-pvc
+  namespace: config-service
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Source: config-service/templates/app-service.yaml
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: config-service
+  namespace: config-service
+
+spec:
+  type: ClusterIP
+
+  selector:
+    app: config-service
+
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+# Source: config-service/templates/postgres-service.yaml
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: config-service-postgres
+  namespace: config-service
+
+spec:
+  type: ClusterIP
+
+  selector:
+    app: config-service-postgres
+
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# Source: config-service/templates/app-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: config-service
+  namespace: config-service
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: config-service
+
+  template:
+    metadata:
+      labels:
+        app: config-service
+
+    spec:
+      containers:
+        - name: config-service
+          image: "config-service:v1"
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8080
+
+          envFrom:
+            - configMapRef:
+                name: config-service-config
+            - secretRef:
+                name: config-service-secret
+
+          resources:
+
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+# Source: config-service/templates/postgres-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: config-service-postgres
+  namespace: config-service
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: config-service-postgres
+
+  template:
+    metadata:
+      labels:
+        app: config-service-postgres
+
+    spec:
+      containers:
+        - name: postgres
+          image: "postgres:16"
+
+          ports:
+            - containerPort: 5432
+
+          env:
+            - name: POSTGRES_DB
+              value: "configdb"
+
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: config-service-secret
+                  key: DB_USER
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: config-service-secret
+                  key: DB_PASSWORD
+
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+
+            - name: db-init-script
+              mountPath: /docker-entrypoint-initdb.d
+
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: config-service-postgres-pvc
+
+        - name: db-init-script
+          configMap:
+            name: config-service-db-init
