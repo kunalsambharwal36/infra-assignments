@@ -22,7 +22,11 @@ func NewHandler(configService *service.ConfigService) *Handler {
 
 func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("pong"))
+
+	if _, err := w.Write([]byte("pong")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) CreateConfig(w http.ResponseWriter, r *http.Request) {
@@ -42,14 +46,16 @@ func (h *Handler) CreateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("Config received successfully"))
+
+	if _, err := w.Write([]byte("Config received successfully")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 
-	// Read URL parameter
 	vars := mux.Vars(r)
-
 	id := vars["id"]
 
 	config, err := h.configService.GetConfig(id)
@@ -60,5 +66,8 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	json.NewEncoder(w).Encode(config)
+	if err := json.NewEncoder(w).Encode(config); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
