@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: config-service
 description: Kubernetes Config Service

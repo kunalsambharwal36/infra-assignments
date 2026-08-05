@@ -1,55 +1,51 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 
 metadata:
-  name: {{ include "config-service.fullname" . }}
-  namespace: {{ .Values.namespace }}
+  name: {{include "config-service.fullname" .}}
+  namespace: {{.Values.namespace}}
 
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{.Values.replicaCount}}
 
   selector:
     matchLabels:
-      app: {{ include "config-service.fullname" . }}
+      app: {{include "config-service.fullname" .}}
 
   template:
     metadata:
       labels:
-        app: {{ include "config-service.fullname" . }}
+        app: {{include "config-service.fullname" .}}
 
     spec:
       containers:
-      - name: config-service
+        - name: config-service
+          image: "{{.Values.image.repository}}:{{.Values.image.tag}}"
+          imagePullPolicy: {{.Values.image.pullPolicy}}
 
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: {{.Values.service.port}}
 
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{include "config-service.fullname" .}}-config
+            - secretRef:
+                name: {{include "config-service.fullname" .}}-secret
 
-        ports:
-        - containerPort: {{ .Values.service.port }}
+          resources:
+{{ toYaml .Values.resources | nindent 12 }}
 
-        envFrom:
-        - configMapRef:
-            name: {{ include "config-service.fullname" . }}-config
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: {{.Values.service.port}}
+            initialDelaySeconds: 15
+            periodSeconds: 10
 
-        - secretRef:
-            name: {{ include "config-service.fullname" . }}-secret
-
-        resources:
-{{ toYaml .Values.resources | indent 10 }}
-
-        livenessProbe:
-          httpGet:
-            path: /ping
-            port: {{ .Values.service.port }}
-
-          initialDelaySeconds: 15
-          periodSeconds: 10
-
-        readinessProbe:
-          httpGet:
-            path: /ping
-            port: {{ .Values.service.port }}
-
-          initialDelaySeconds: 5
-          periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: {{.Values.service.port}}
+            initialDelaySeconds: 5
+            periodSeconds: 5

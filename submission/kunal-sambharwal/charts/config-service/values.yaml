@@ -1,3 +1,4 @@
+---
 namespace: config-service
 
 replicaCount: 1
@@ -17,13 +18,9 @@ postgres:
     tag: "16"
 
   database: configdb
-
   username: postgres
-
   password: postgres
-
   port: 5432
-
   storage: 1Gi
 
 resources:
